@@ -124,7 +124,7 @@ def update_courses():
             course_key = redis_number_to_coursestring.format(course_number, term)
 
             pipe.sadd(all_classes_key, course_string)
-            pipse.set(course_key, course_string)
+            pipe.set(course_key, course_string)
         pipe.execute() # run transaction!
 
     else:
