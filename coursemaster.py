@@ -135,9 +135,9 @@ def update_courses():
     oldhash = r.get(open_hash_key)
     newhash = hashlib.sha1(opencourses_request.text).hexdigest()
 
+    old_closed = r.smembers(closed_classes_key) 
     if newhash != oldhash:
         # store a set of closed classes
-        old_closed = r.smembers(closed_classes_key) 
 
         # we want updating the open/closed class sets to be atomic
         pipe = r.pipeline()
@@ -183,8 +183,15 @@ def update_courses():
 
 class SMSHandler(web.RequestHandler):
     def post(self):
-        print self.request
-        self.write('You are now subscribed!')
+        # TODO: actually do stuff here
+        msg = self.get_argument('Body', '')
+	response = """
+		<?xml version="1.0" encoding="UTF-8" ?>  
+			<Response> 
+			    <Sms>You are now subscribed!</Sms>
+			</Response>
+"""
+        self.write(response)
 
 
 if __name__ == '__main__':
