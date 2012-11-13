@@ -197,7 +197,7 @@ class SMSHandler(web.RequestHandler):
 
         if course:
             r.sadd(redis_notify_set.format(course, term), phone)
-	    response = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>You are now subscribed to {} {} {}!</Sms></Response>".format(parts[0], parts[1], parts[2])
+	    response = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>You are now subscribed to {} {} section {}!</Sms></Response>".format(parts[0], parts[1], parts[2])
         else:
 		response = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>The class you requested doesn't exist</Sms></Response>"
 
