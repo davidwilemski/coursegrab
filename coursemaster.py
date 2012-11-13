@@ -6,8 +6,10 @@ import StringIO
 import re
 import hashlib
 import gevent
+from gevent.wsgi import WSGIServer
 import geventutil
 from twilio.rest import TwilioRestClient
+from tornado import web, wsgi
 import os
 
 # make gevent awesome
@@ -179,6 +181,10 @@ def update_courses():
             r.lpush(twilio_key,
                     json.dumps({'phonenum': phonenum, 'message': msg}))
 
+class SMSHandler(web.RequestHandler):
+    def post(self):
+        print self.request
+        self.write('You are now subscribed!')
 
 
 if __name__ == '__main__':
@@ -186,4 +192,11 @@ if __name__ == '__main__':
     geventutil.schedule(halfhour, update_courses)
 
     w = gevent.spawn(twilio_worker)
-    w.join()
+
+    application = wsgi.WSGIApplication([
+        (r"/twilio_receive", SMSHandler),
+    ])
+
+    # create the WSGI server and use serve_forever to allow the whole
+    # application to loop forever - including the course updater, twilio worker
+    WSGIServer(('', 10001), application).serve_forever()
