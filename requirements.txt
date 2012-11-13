@@ -4,3 +4,4 @@ redis
 hiredis
 requests
 -e git://github.com/leporo/tornado-redis.git#egg=tornadoredis
+twilio
