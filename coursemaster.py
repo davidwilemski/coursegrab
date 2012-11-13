@@ -11,6 +11,7 @@ import geventutil
 from twilio.rest import TwilioRestClient
 from tornado import web, wsgi
 import os
+import json
 
 # make gevent awesome
 from gevent import monkey
@@ -42,12 +43,13 @@ def twilio_worker():
 
     while True:
         data = r.brpop(twilio_key)[1]
+        data = json.loads(data)
 
         # TODO validate that this is a phone number, should be okay 
         # for now because the only way a phone number gets here
         # is via a real text message
         phonenum = data['phonenum']
-        msg = data['msg']
+        msg = data['message']
 
         message = client.sms.messages.create(
                 to=phonenum,
@@ -175,7 +177,7 @@ def update_courses():
         users_to_notify = r.smembers(redis_notify_set.format(c, term))
 
         courseinfo = c.split('_')
-        notification = "{} {} section {} is now available! Hurry up before someone takes your spot!".format(courseinfo[0], courseinfo[1], courseinfo[2])
+        msg = "{} {} section {} is now available! Hurry up before someone takes your spot!".format(courseinfo[0], courseinfo[1], courseinfo[2])
         for phonenum in users_to_notify:
             # construct a text message for each user and SEND SEND SEND
             r.lpush(twilio_key,
@@ -183,14 +185,22 @@ def update_courses():
 
 class SMSHandler(web.RequestHandler):
     def post(self):
-        # TODO: actually do stuff here
+        term = r.get('coursegrab_current_term')
+
         msg = self.get_argument('Body', '')
-	response = """
-		<?xml version="1.0" encoding="UTF-8" ?>  
-			<Response> 
-			    <Sms>You are now subscribed!</Sms>
-			</Response>
-"""
+        phone = self.get_argument('From', '')
+	msg = msg.lower()
+	words = msg.split()
+	key = redis_number_to_coursestring.format(words[1], term) 
+	course = r.get(key)
+        parts = course.split("_")
+
+        if course:
+            r.sadd(redis_notify_set.format(course, term), phone)
+	    response = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>You are now subscribed to {} {} {}!</Sms></Response>".format(parts[0], parts[1], parts[2])
+        else:
+		response = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>The class you requested doesn't exist</Sms></Response>"
+
         self.write(response)
 
 
