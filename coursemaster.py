@@ -7,12 +7,14 @@ import re
 import hashlib
 import gevent
 import geventutil
+from twilio.rest import TwilioRestClient
+import os
 
 # make gevent awesome
 from gevent import monkey
 monkey.patch_all()
 
-COURSE_STRING = '{}{}_{}' # dept, catalog, section
+COURSE_STRING = '{}_{}_{}' # dept, catalog, section
 COURSES_BASEURL = 'http://www.ro.umich.edu/timesched/pdf/'
 
 redis_depts = 'coursegrab_departments_{}' # term
@@ -21,12 +23,51 @@ redis_sections = 'coursegrab_{}{}_classes_sections_{}' # dept, catalog, term
 redis_all_classes = 'coursegrab_all_classes_{}' # term
 redis_open_classes = 'coursegrab_open_classes_{}' # term
 redis_closed_classes = 'coursegrab_closed_classes_{}' # term
+redis_number_to_coursestring = 'coursegrab_{}_{}' # coursenum, term
+redis_notify_set = 'coursegrab_{}_{}' # course string, term
+twilio_key = 'coursegrab_twilio_send_worker'
 
 dept_regex = re.compile(r'\(([A-Z]*)\)')
 
 r = redis.StrictRedis(host='localhost', port=6379, db=0)
 
+def twilio_worker():
+    # loads settings from the env
+    # variables: TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN
+    # also uses TWILIO_SOURCE_NUMBER to configure the from phone number
+    client = TwilioRestClient()
+    source_num = os.environ['TWILIO_SOURCE_NUMBER']
+
+    while True:
+        data = r.brpop(twilio_key)[1]
+
+        # TODO validate that this is a phone number, should be okay 
+        # for now because the only way a phone number gets here
+        # is via a real text message
+        phonenum = data['phonenum']
+        msg = data['msg']
+
+        message = client.sms.messages.create(
+                to=phonenum,
+                _from=source_num,
+                body=msg)
+
+
 def update_courses():
+    """
+    Updates our information about courses currently offered and which have 
+    seats available. All of these updates are done within redis transactions
+    so as to ensure that data is not in an inconsistent state for other
+    clients that may be connected
+
+    Also notifies any users that were queued up to be notified of a change
+    in a course's availability.
+
+    This is done by keeping a set in memory of the previous closed classes
+    and getting the difference betweent that and the new set of closed classes.
+    Any that was in the oldset but not in newset are now available and should
+    have users in the corresponding class queue notified.
+    """
     term = r.get('coursegrab_current_term')
 
     if term is None:
@@ -77,7 +118,11 @@ def update_courses():
             pipe.sadd(classes_key, catalog)
             pipe.sadd(sections_key, section)
 
-            pipe.sadd(all_classes_key, COURSE_STRING.format(dept, catalog, section))
+            course_string = COURSE_STRING.format(dept, catalog, section)
+            course_key = redis_number_to_coursestring.format(course_number, term)
+
+            pipe.sadd(all_classes_key, course_string)
+            pipse.set(course_key, course_string)
         pipe.execute() # run transaction!
 
     else:
@@ -89,10 +134,14 @@ def update_courses():
     newhash = hashlib.sha1(opencourses_request.text).hexdigest()
 
     if newhash != oldhash:
+        # store a set of closed classes
+        old_closed = r.smembers(closed_classes_key) 
+
         # we want updating the open/closed class sets to be atomic
         pipe = r.pipeline()
         pipe.set(open_hash_key, newhash)
         pipe.delete(open_classes_key)
+        pipe.delete(closed_classes_key)
         for c in opencourses_csv:
             dept = dept_regex.search(c[4]).group(0).strip('()').strip()
             catalog = c[5].strip()
@@ -115,7 +164,26 @@ def update_courses():
     num_closed_classes = r.scard(closed_classes_key)
     print 'there are', num_closed_classes, 'closed classes'
 
+    new_closed = r.smembers(closed_classes_key)
+    now_available = old_closed - new_closed
+
+    # get users in each user notification queue
+    for c in now_available:
+        # users_to_notify is a set of phone numbers
+        users_to_notify = r.smembers(redis_notify_set.format(c, term))
+
+        courseinfo = c.split('_')
+        notification = "{} {} section {} is now available! Hurry up before someone takes your spot!".format(courseinfo[0], courseinfo[1], courseinfo[2])
+        for phonenum in users_to_notify:
+            # construct a text message for each user and SEND SEND SEND
+            r.lpush(twilio_key,
+                    json.dumps({'phonenum': phonenum, 'message': msg}))
+
+
 
 if __name__ == '__main__':
     halfhour = 60 * 30 # 30 minutes in seconds
     geventutil.schedule(halfhour, update_courses)
+
+    w = gevent.spawn(twilio_worker)
+    w.join()
