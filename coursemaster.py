@@ -183,24 +183,40 @@ def update_courses():
             r.lpush(twilio_key,
                     json.dumps({'phonenum': phonenum, 'message': msg}))
 
-class SMSHandler(web.RequestHandler):
-    def post(self):
-        term = r.get('coursegrab_current_term')
 
+class SMSHandler(web.RequestHandler):
+    def _handle_sms(self, phone, words):
+        if words[0].lower() in {"sub", "subscribe", "notify"}:
+            term = r.get('coursegrab_current_term')
+            key = redis_number_to_coursestring.format(words[1], term) 
+            course = r.get(key)
+            parts = course.split("_")
+
+            # check that the course exists and is closed
+            if course and r.sismember(redis_closed_classes.format(term), course):
+                r.sadd(redis_notify_set.format(course, term), phone)
+                return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>You are now subscribed to {} {} section {}!</Sms></Response>".format(parts[0], parts[1], parts[2])
+            
+            elif course:
+                return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>The class you requested is not closed.</Sms></Response>"
+
+            else:
+                return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>The class you requested doesn't exist</Sms></Response>"
+
+        elif words[0].lower() in {"unsub", "unsubscribe", "remove"}:
+            r.srem(redis_notify_set.format(course, term), phone)
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>You are unsubscribed from {} {} section {}!</Sms></Response>".format(parts[0], parts[1], parts[2])
+
+        else:
+            return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>Command not recognized. Please send: \"subscribe <classnumber>\" or \"unsubscribe <classnumber>\"</Sms></Response>"
+
+    def post(self):
         msg = self.get_argument('Body', '')
         phone = self.get_argument('From', '')
-	msg = msg.lower()
-	words = msg.split()
-	key = redis_number_to_coursestring.format(words[1], term) 
-	course = r.get(key)
-        parts = course.split("_")
+        msg = msg.lower()
+        words = msg.split()
 
-        if course:
-            r.sadd(redis_notify_set.format(course, term), phone)
-	    response = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>You are now subscribed to {} {} section {}!</Sms></Response>".format(parts[0], parts[1], parts[2])
-        else:
-		response = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>The class you requested doesn't exist</Sms></Response>"
-
+        response = self._handle_sms(phone, words)
         self.write(response)
 
 
