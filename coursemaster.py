@@ -28,6 +28,9 @@ redis_open_classes = 'coursegrab_open_classes_{}' # term
 redis_closed_classes = 'coursegrab_closed_classes_{}' # term
 redis_number_to_coursestring = 'coursegrab_{}_{}' # coursenum, term
 redis_notify_set = 'coursegrab_{}_{}' # course string, term
+redis_term_phones = 'coursegrab_phones_{}' # term
+redis_all_phones= 'coursegrab_phones' # course string, term
+redis_phone_to_courses = 'coursegrab_{}_courses_{}' # phone, term
 twilio_key = 'coursegrab_twilio_send_worker'
 
 dept_regex = re.compile(r'\(([A-Z]*)\)')
@@ -195,6 +198,7 @@ class SMSHandler(web.RequestHandler):
             # check that the course exists and is closed
             if course and r.sismember(redis_closed_classes.format(term), course):
                 r.sadd(redis_notify_set.format(course, term), phone)
+                r.sadd(redis_phone_to_courses.format(phone, term), course)
                 return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>You are now subscribed to {} {} section {}!</Sms></Response>".format(parts[0], parts[1], parts[2])
             
             elif course:
@@ -205,6 +209,7 @@ class SMSHandler(web.RequestHandler):
 
         elif words[0].lower() in {"unsub", "unsubscribe", "remove"}:
             r.srem(redis_notify_set.format(course, term), phone)
+            r.srem(redis_phone_to_courses.format(phone, term), course)
             return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>You are unsubscribed from {} {} section {}!</Sms></Response>".format(parts[0], parts[1], parts[2])
 
         else:
@@ -215,6 +220,10 @@ class SMSHandler(web.RequestHandler):
         phone = self.get_argument('From', '')
         msg = msg.lower()
         words = msg.split()
+        
+        term = r.get('coursegrab_current_term')
+        r.sadd(redis_all_phones, phone)
+        r.sadd(redis_term_phones.format(term), phone)
 
         response = self._handle_sms(phone, words)
         self.write(response)
