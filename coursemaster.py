@@ -198,6 +198,10 @@ class SMSHandler(web.RequestHandler):
         term = r.get('coursegrab_current_term')
 
         if words[0].lower() in {"sub", "subscribe", "notify"}:
+            if len(words) < 2:
+                msg = "Command not recognized. Please send: \"subscribe &lt;classnumber&gt;\" or \"unsubscribe &lt;classnumber&gt;\" or 'list' to list subscriptions"
+                return self.twiml_sms(msg)
+
             key = redis_number_to_coursestring.format(words[1], term) 
             course = r.get(key)
 
@@ -216,6 +220,9 @@ class SMSHandler(web.RequestHandler):
                 self.twiml_sms("The class you requested doesn't exist")
 
         elif words[0].lower() in {"unsub", "unsubscribe", "remove"}:
+            if len(words) < 2:
+                msg = "Command not recognized. Please send: \"subscribe &lt;classnumber&gt;\" or \"unsubscribe &lt;classnumber&gt;\" or 'list' to list subscriptions"
+                return self.twiml_sms(msg)
             key = redis_number_to_coursestring.format(words[1], term) 
             course = r.get(key)
 
