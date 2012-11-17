@@ -188,32 +188,66 @@ def update_courses():
 
 
 class SMSHandler(web.RequestHandler):
+    def twiml_sms(self, message):
+        # TODO: break messages up if >160 characters
+        message = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>" + message + "</Sms></Response>"
+        print message
+        self.write(message)
+
     def _handle_sms(self, phone, words):
+        term = r.get('coursegrab_current_term')
+
         if words[0].lower() in {"sub", "subscribe", "notify"}:
-            term = r.get('coursegrab_current_term')
             key = redis_number_to_coursestring.format(words[1], term) 
             course = r.get(key)
-            parts = course.split("_")
 
             # check that the course exists and is closed
             if course and r.sismember(redis_closed_classes.format(term), course):
                 r.sadd(redis_notify_set.format(course, term), phone)
                 r.sadd(redis_phone_to_courses.format(phone, term), course)
-                return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>You are now subscribed to {} {} section {}!</Sms></Response>".format(parts[0], parts[1], parts[2])
+                parts = course.split("_")
+                msg = "You are now subscribed to {} {} section {}!".format(parts[0], parts[1], parts[2])
+                self.twiml_sms(msg)
             
             elif course:
-                return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>The class you requested is not closed.</Sms></Response>"
+                self.twiml_sms("The class you requested is not closed.")
 
             else:
-                return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>The class you requested doesn't exist</Sms></Response>"
+                self.twiml_sms("The class you requested doesn't exist")
 
         elif words[0].lower() in {"unsub", "unsubscribe", "remove"}:
-            r.srem(redis_notify_set.format(course, term), phone)
-            r.srem(redis_phone_to_courses.format(phone, term), course)
-            return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>You are unsubscribed from {} {} section {}!</Sms></Response>".format(parts[0], parts[1], parts[2])
+            key = redis_number_to_coursestring.format(words[1], term) 
+            course = r.get(key)
+
+            if course:
+                r.srem(redis_notify_set.format(course, term), phone)
+                r.srem(redis_phone_to_courses.format(phone, term), course)
+                parts = course.split("_")
+                msg = "You are unsubscribed from {} {} section {}!".format(parts[0], parts[1], parts[2])
+                self.twiml_sms(msg)
+
+            else:
+                self.twiml_sms("The class you requested doesn't exist")
+
+        elif words[0].lower() in {'list', 'subs', 'subscriptions'}:
+            courses = r.smembers(redis_phone_to_courses.format(phone, term))
+            message = ['You are subscribed to:']
+            for course in courses:
+                course = course.split('_')
+                message.append('{} {} section {}'.format(course[0], course[1], course[2]))
+            if len(message) > 1:
+                message = '\n'.join(message)
+            else:
+                message = "You are not subscribed to any classes. To get started send 'subscribe &lt;5 digit course number&gt;'."
+            self.twiml_sms(message) 
+
+        elif words[0].lower() in {'help', 'info', 'information', 'man'}:
+            message = "Coursegrab is made to notify University of Michigan students of course openings. To get started send 'subscribe &lt;5 digit course number&gt;'."
+            self.twiml_sms(message)
 
         else:
-            return "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>Command not recognized. Please send: \"subscribe <classnumber>\" or \"unsubscribe <classnumber>\"</Sms></Response>"
+            msg = "Command not recognized. Please send: \"subscribe &lt;classnumber&gt;\" or \"unsubscribe &lt;classnumber&gt;\" or 'list' to list subscriptions"
+            self.twiml_sms(msg)
 
     def post(self):
         msg = self.get_argument('Body', '')
@@ -225,8 +259,7 @@ class SMSHandler(web.RequestHandler):
         r.sadd(redis_all_phones, phone)
         r.sadd(redis_term_phones.format(term), phone)
 
-        response = self._handle_sms(phone, words)
-        self.write(response)
+        self._handle_sms(phone, words)
 
 
 if __name__ == '__main__':
