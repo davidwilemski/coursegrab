@@ -140,9 +140,11 @@ def update_courses():
     oldhash = r.get(open_hash_key)
     newhash = hashlib.sha1(opencourses_request.text).hexdigest()
 
-    old_closed = r.smembers(closed_classes_key) 
+    classes_updated = False
     if newhash != oldhash:
         # store a set of closed classes
+        old_closed = r.smembers(closed_classes_key) 
+        classes_updated = True
 
         # we want updating the open/closed class sets to be atomic
         pipe = r.pipeline()
@@ -168,6 +170,9 @@ def update_courses():
     else:
         print 'no need to update open classes!'
 
+    if not classes_updated:
+        return # no need to recompute closed classes or try to notify people
+
     num_closed_classes = r.scard(closed_classes_key)
     print 'there are', num_closed_classes, 'closed classes'
 
@@ -191,7 +196,6 @@ class SMSHandler(web.RequestHandler):
     def twiml_sms(self, message):
         # TODO: break messages up if >160 characters
         message = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?><Response><Sms>" + message + "</Sms></Response>"
-        print message
         self.write(message)
 
     def _handle_sms(self, phone, words):
