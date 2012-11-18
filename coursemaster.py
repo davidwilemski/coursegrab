@@ -280,6 +280,10 @@ class SMSHandler(web.RequestHandler):
 
         self._handle_sms(phone, words)
 
+class HomeHandler(web.RequestHandler):
+
+    def get(self):
+        self.render("index.html", phonenum=os.environ['TWILIO_SOURCE_NUMBER'])
 
 if __name__ == '__main__':
     logging.basicConfig(
@@ -292,6 +296,7 @@ if __name__ == '__main__':
     w = gevent.spawn(twilio_worker)
 
     application = wsgi.WSGIApplication([
+        (r"/", HomeHandler),
         (r"/twilio_receive", SMSHandler),
     ])
 
