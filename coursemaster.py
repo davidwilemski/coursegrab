@@ -12,6 +12,7 @@ from twilio.rest import TwilioRestClient
 from tornado import web, wsgi
 import os
 import json
+import logging
 
 # make gevent awesome
 from gevent import monkey
@@ -36,6 +37,7 @@ twilio_key = 'coursegrab_twilio_send_worker'
 dept_regex = re.compile(r'\(([A-Z]*)\)')
 
 r = redis.StrictRedis(host='localhost', port=6379, db=0)
+log = logging.getLogger(__file__)
 
 def twilio_worker():
     # loads settings from the env
@@ -53,6 +55,8 @@ def twilio_worker():
         # is via a real text message
         phonenum = data['phonenum']
         msg = data['message']
+
+        log.info("sending sms")
 
         message = client.sms.messages.create(
                 to=phonenum,
@@ -79,8 +83,10 @@ def update_courses():
 
     if term is None:
         # should log, maybe notify
-        print 'no current term configured, cannot run'
+        log.error('no current term configured, cannot run')
         return
+
+    log.info("updating course information")
 
     depts_key = redis_depts.format(term)
     all_classes_key = redis_all_classes.format(term)
@@ -133,7 +139,7 @@ def update_courses():
         pipe.execute() # run transaction!
 
     else:
-        print 'no need to update all classes!'
+        log.info('no need to update all classes!')
 
     # only run update if hash is different for open classes
     open_hash_key = '{}_open_hash'.format(term)
@@ -168,13 +174,13 @@ def update_courses():
         pipe.sdiffstore(closed_classes_key, all_classes_key, open_classes_key)
         pipe.execute() # run the transaction
     else:
-        print 'no need to update open classes!'
+        log.info('no need to update open classes!')
 
     if not classes_updated:
         return # no need to recompute closed classes or try to notify people
 
     num_closed_classes = r.scard(closed_classes_key)
-    print 'there are', num_closed_classes, 'closed classes'
+    log.info('there are ' + num_closed_classes + ' closed classes')
 
     new_closed = r.smembers(closed_classes_key)
     now_available = old_closed - new_closed
@@ -274,6 +280,10 @@ class SMSHandler(web.RequestHandler):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.DEBUG, 
+        format="%(asctime)s - %(levelname)s - %(name)s - %(msg)s")
+
     halfhour = 60 * 30 # 30 minutes in seconds
     geventutil.schedule(halfhour, update_courses)
 
