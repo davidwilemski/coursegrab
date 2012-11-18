@@ -7,12 +7,14 @@ import re
 import hashlib
 import gevent
 from gevent.wsgi import WSGIServer
-import geventutil
 from twilio.rest import TwilioRestClient
 from tornado import web, wsgi
 import os
 import json
 import logging
+
+# local imports
+import geventutil
 
 # make gevent awesome
 from gevent import monkey
