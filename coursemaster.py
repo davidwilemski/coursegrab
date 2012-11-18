@@ -56,7 +56,7 @@ def twilio_worker():
         phonenum = data['phonenum']
         msg = data['message']
 
-        log.info("sending sms")
+        log.info("sending notification sms")
 
         message = client.sms.messages.create(
                 to=phonenum,
