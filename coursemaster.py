@@ -298,7 +298,7 @@ if __name__ == '__main__':
     application = wsgi.WSGIApplication([
         (r"/", HomeHandler),
         (r"/twilio_receive", SMSHandler),
-    ])
+    ], **{"static_path": os.path.join(os.path.dirname(__file__), "static")})
 
     # create the WSGI server and use serve_forever to allow the whole
     # application to loop forever - including the course updater, twilio worker
