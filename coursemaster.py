@@ -182,7 +182,7 @@ def update_courses():
         return # no need to recompute closed classes or try to notify people
 
     num_closed_classes = r.scard(closed_classes_key)
-    log.info('there are ' + num_closed_classes + ' closed classes')
+    log.info('there are {} closed classes'.format(num_closed_classes))
 
     new_closed = r.smembers(closed_classes_key)
     now_available = old_closed - new_closed
