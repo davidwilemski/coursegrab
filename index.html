@@ -1,21 +1,42 @@
+<!DOCTYPE html>
 <html>
     <head>
+        <title>coursegrab | class opening notifier</title>
 
+        <link href="http://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/css/bootstrap-combined.min.css" rel="stylesheet">
+
+        <style>
+            .centered-text {
+                text-align:center;
+            }
+        </style>
     </head>
 
     <body>
-        <h1>coursegrab</h1>
-        <p>
-            Coursegrab is a tool for University of Michigan students to help with building class schedules. It allows you to be notified when a class section that was previously closed (without a waitlist) is open again. This lets students get into the classes they want without needing to constantly check section availability.
-        </p>
+        <div class="container-fluid">
+            <div class="row-fluid">
+                <div class="span4 centered-text">
+                    <img src="galaxynexusframe.png" alt="coursegrab screenshot" />
+                </div>
+                <div class="span8">
+                    <h1 class="centered-text">coursegrab</h1>
+                    <p>
+                        Coursegrab is a tool for University of Michigan students to help with building class schedules. It allows you to be notified when a class section that was previously closed (without a waitlist) is open again. This lets students get into the classes they want without needing to constantly check section availability.
+                    </p>
 
-        <p>
-            To be notified when a class opens send a text message to {{ phonenum }} that says
-            <strong>subscribe 12345</strong>
-            where 12345 is the 5 digit class number found on Wolverine Access.
-        </p>
+                    <p>
+                        To be notified when a class opens send a text message to {{ phonenum }} that says
+                        <strong>subscribe 12345</strong>
+                        where 12345 is the 5 digit class number found on Wolverine Access.
+                    </p>
+                </div>
+            </div>
+            <div class="row-fluid">
+                <div class="span12 centered-text">
+                    <h6>Made by <a href="https://twitter.com/davidwilemski">@davidwilemski</a></h6>
+                </div>
+            </div>
 
-        <br />
-        <h6><a href="https://twitter.com/davidwilemski">Made by @davidwilemski</a></h6>
+        </div>
     </body>
 </html>
