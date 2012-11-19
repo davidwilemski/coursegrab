@@ -30,6 +30,7 @@ redis_all_classes = 'coursegrab_all_classes_{}' # term
 redis_open_classes = 'coursegrab_open_classes_{}' # term
 redis_closed_classes = 'coursegrab_closed_classes_{}' # term
 redis_number_to_coursestring = 'coursegrab_{}_{}' # coursenum, term
+redis_coursestring_to_number = 'coursegrab_string_to_num_{}_{}' # coursestring, term
 redis_notify_set = 'coursegrab_{}_{}' # course string, term
 redis_term_phones = 'coursegrab_phones_{}' # term
 redis_all_phones= 'coursegrab_phones' # course string, term
@@ -138,6 +139,7 @@ def update_courses():
 
             pipe.sadd(all_classes_key, course_string)
             pipe.set(course_key, course_string)
+            pipe.set(redis_coursestring_to_number.format(course_string, term), course_number)
         pipe.execute() # run transaction!
 
     else:
@@ -191,9 +193,10 @@ def update_courses():
     for c in now_available:
         # users_to_notify is a set of phone numbers
         users_to_notify = r.smembers(redis_notify_set.format(c, term))
+        num = r.get(redis_coursestring_to_number.format(c, term))
 
         courseinfo = c.split('_')
-        msg = "{} {} section {} is now available! Hurry up before someone takes your spot!".format(courseinfo[0], courseinfo[1], courseinfo[2])
+        msg = "{} {} section {} is now available! If you no longer want notifications for this class, respond with \"unsubscribe {}\"".format(courseinfo[0], courseinfo[1], courseinfo[2], num)
         for phonenum in users_to_notify:
             # construct a text message for each user and SEND SEND SEND
             r.lpush(twilio_key,
