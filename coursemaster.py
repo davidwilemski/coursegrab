@@ -20,27 +20,28 @@ import geventutil
 from gevent import monkey
 monkey.patch_all()
 
-COURSE_STRING = '{}_{}_{}' # dept, catalog, section
+COURSE_STRING = '{}_{}_{}'  # dept, catalog, section
 COURSES_BASEURL = 'http://www.ro.umich.edu/timesched/pdf/'
 
-redis_depts = 'coursegrab_departments_{}' # term
-redis_classes = 'coursegrab_{}_classes_{}' # dept, term
-redis_sections = 'coursegrab_{}{}_classes_sections_{}' # dept, catalog, term
-redis_all_classes = 'coursegrab_all_classes_{}' # term
-redis_open_classes = 'coursegrab_open_classes_{}' # term
-redis_closed_classes = 'coursegrab_closed_classes_{}' # term
-redis_number_to_coursestring = 'coursegrab_{}_{}' # coursenum, term
-redis_coursestring_to_number = 'coursegrab_string_to_num_{}_{}' # coursestring, term
-redis_notify_set = 'coursegrab_{}_{}' # course string, term
-redis_term_phones = 'coursegrab_phones_{}' # term
-redis_all_phones= 'coursegrab_phones' # course string, term
-redis_phone_to_courses = 'coursegrab_{}_courses_{}' # phone, term
+redis_depts = 'coursegrab_departments_{}'  # term
+redis_classes = 'coursegrab_{}_classes_{}'  # dept, term
+redis_sections = 'coursegrab_{}{}_classes_sections_{}'  # dept, catalog, term
+redis_all_classes = 'coursegrab_all_classes_{}'  # term
+redis_open_classes = 'coursegrab_open_classes_{}'  # term
+redis_closed_classes = 'coursegrab_closed_classes_{}'  # term
+redis_number_to_coursestring = 'coursegrab_{}_{}'  # coursenum, term
+redis_coursestring_to_number = 'coursegrab_string_to_num_{}_{}'  # coursestring, term
+redis_notify_set = 'coursegrab_{}_{}'  # course string, term
+redis_term_phones = 'coursegrab_phones_{}'  # term
+redis_all_phones = 'coursegrab_phones'  # course string, term
+redis_phone_to_courses = 'coursegrab_{}_courses_{}'  # phone, term
 twilio_key = 'coursegrab_twilio_send_worker'
 
 dept_regex = re.compile(r'\(([A-Z]*)\)')
 
 r = redis.StrictRedis(host='localhost', port=6379, db=0)
 log = logging.getLogger(__file__)
+
 
 def twilio_worker():
     # loads settings from the env
@@ -53,7 +54,7 @@ def twilio_worker():
         data = r.brpop(twilio_key)[1]
         data = json.loads(data)
 
-        # TODO validate that this is a phone number, should be okay 
+        # TODO validate that this is a phone number, should be okay
         # for now because the only way a phone number gets here
         # is via a real text message
         phonenum = data['phonenum']
@@ -62,14 +63,14 @@ def twilio_worker():
         log.info("sending notification sms")
 
         message = client.sms.messages.create(
-                to=phonenum,
-                _from=source_num,
-                body=msg)
+            to=phonenum,
+            _from=source_num,
+            body=msg)
 
 
 def update_courses():
     """
-    Updates our information about courses currently offered and which have 
+    Updates our information about courses currently offered and which have
     seats available. All of these updates are done within redis transactions
     so as to ensure that data is not in an inconsistent state for other
     clients that may be connected
@@ -135,12 +136,14 @@ def update_courses():
             pipe.sadd(sections_key, section)
 
             course_string = COURSE_STRING.format(dept, catalog, section)
-            course_key = redis_number_to_coursestring.format(course_number, term)
+            course_key = redis_number_to_coursestring.format(
+                course_number, term)
 
             pipe.sadd(all_classes_key, course_string)
             pipe.set(course_key, course_string)
-            pipe.set(redis_coursestring_to_number.format(course_string, term), course_number)
-        pipe.execute() # run transaction!
+            pipe.set(redis_coursestring_to_number.format(
+                course_string, term), course_number)
+        pipe.execute()  # run transaction!
 
     else:
         log.info('no need to update all classes!')
@@ -153,7 +156,7 @@ def update_courses():
     classes_updated = False
     if newhash != oldhash:
         # store a set of closed classes
-        old_closed = r.smembers(closed_classes_key) 
+        old_closed = r.smembers(closed_classes_key)
         classes_updated = True
 
         # we want updating the open/closed class sets to be atomic
@@ -171,17 +174,17 @@ def update_courses():
             classes_key = redis_classes.format(dept, term)
             sections_key = redis_sections.format(dept, catalog, term)
 
-
-            pipe.sadd(open_classes_key, COURSE_STRING.format(dept, catalog, section))
+            pipe.sadd(open_classes_key, COURSE_STRING.format(
+                dept, catalog, section))
 
         # include computing closed_classes set in the transaction
         pipe.sdiffstore(closed_classes_key, all_classes_key, open_classes_key)
-        pipe.execute() # run the transaction
+        pipe.execute()  # run the transaction
     else:
         log.info('no need to update open classes!')
 
     if not classes_updated:
-        return # no need to recompute closed classes or try to notify people
+        return  # no need to recompute closed classes or try to notify people
 
     num_closed_classes = r.scard(closed_classes_key)
     log.info('there are {} closed classes'.format(num_closed_classes))
@@ -217,7 +220,7 @@ class SMSHandler(web.RequestHandler):
                 msg = "Command not recognized. Please send: \"subscribe &lt;classnumber&gt;\" or \"unsubscribe &lt;classnumber&gt;\" or 'list' to list subscriptions"
                 return self.twiml_sms(msg)
 
-            key = redis_number_to_coursestring.format(words[1], term) 
+            key = redis_number_to_coursestring.format(words[1], term)
             course = r.get(key)
 
             # check that the course exists and is closed
@@ -225,9 +228,10 @@ class SMSHandler(web.RequestHandler):
                 r.sadd(redis_notify_set.format(course, term), phone)
                 r.sadd(redis_phone_to_courses.format(phone, term), course)
                 parts = course.split("_")
-                msg = "You are now subscribed to {} {} section {}!".format(parts[0], parts[1], parts[2])
+                msg = "You are now subscribed to {} {} section {}!".format(
+                    parts[0], parts[1], parts[2])
                 self.twiml_sms(msg)
-            
+
             elif course:
                 self.twiml_sms("The class you requested is not closed.")
 
@@ -238,14 +242,15 @@ class SMSHandler(web.RequestHandler):
             if len(words) < 2:
                 msg = "Command not recognized. Please send: \"subscribe &lt;classnumber&gt;\" or \"unsubscribe &lt;classnumber&gt;\" or 'list' to list subscriptions"
                 return self.twiml_sms(msg)
-            key = redis_number_to_coursestring.format(words[1], term) 
+            key = redis_number_to_coursestring.format(words[1], term)
             course = r.get(key)
 
             if course:
                 r.srem(redis_notify_set.format(course, term), phone)
                 r.srem(redis_phone_to_courses.format(phone, term), course)
                 parts = course.split("_")
-                msg = "You are unsubscribed from {} {} section {}!".format(parts[0], parts[1], parts[2])
+                msg = "You are unsubscribed from {} {} section {}!".format(
+                    parts[0], parts[1], parts[2])
                 self.twiml_sms(msg)
 
             else:
@@ -256,12 +261,13 @@ class SMSHandler(web.RequestHandler):
             message = ['You are subscribed to:']
             for course in courses:
                 course = course.split('_')
-                message.append('{} {} section {}'.format(course[0], course[1], course[2]))
+                message.append('{} {} section {}'.format(
+                    course[0], course[1], course[2]))
             if len(message) > 1:
                 message = '\n'.join(message)
             else:
                 message = "You are not subscribed to any classes. To get started send 'subscribe &lt;5 digit course number&gt;'."
-            self.twiml_sms(message) 
+            self.twiml_sms(message)
 
         elif words[0].lower() in {'help', 'info', 'information', 'man'}:
             message = "Coursegrab is made to notify University of Michigan students of course openings. To get started send 'subscribe &lt;5 digit course number&gt;'."
@@ -276,12 +282,13 @@ class SMSHandler(web.RequestHandler):
         phone = self.get_argument('From', '')
         msg = msg.lower()
         words = msg.split()
-        
+
         term = r.get('coursegrab_current_term')
         r.sadd(redis_all_phones, phone)
         r.sadd(redis_term_phones.format(term), phone)
 
         self._handle_sms(phone, words)
+
 
 class HomeHandler(web.RequestHandler):
 
@@ -290,10 +297,10 @@ class HomeHandler(web.RequestHandler):
 
 if __name__ == '__main__':
     logging.basicConfig(
-        level=logging.DEBUG, 
+        level=logging.DEBUG,
         format="%(asctime)s - %(levelname)s - %(name)s - %(msg)s")
 
-    halfhour = 60 * 30 # 30 minutes in seconds
+    halfhour = 60 * 30  # 30 minutes in seconds
     geventutil.schedule(halfhour, update_courses)
 
     w = gevent.spawn(twilio_worker)
