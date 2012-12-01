@@ -290,6 +290,7 @@ class HomeHandler(web.RequestHandler):
 
 if __name__ == '__main__':
     logging.basicConfig(
+        # filename="/tmp/coursemaster.log", # gevent doesn't use logging module - annoying
         level=logging.DEBUG, 
         format="%(asctime)s - %(levelname)s - %(name)s - %(msg)s")
 
