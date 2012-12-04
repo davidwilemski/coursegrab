@@ -10,11 +10,14 @@ def parse_line(data, line):
     
     elif 'POST /twilio_receive' in line:
         data['sms.received'] += 1 
+    
+    elif 'sending notification sms' in line:
+        data['sms.sent'] += 1 
 
 if __name__ == '__main__':
     global last_count
     tail_monitor(component='coursegrab',
             log_filename='/tmp/coursemaster.log',
             line_callback_func=parse_line,
-            data_arg={'site.hits': 0, 'sms.received':0},
+            data_arg={'site.hits': 0, 'sms.received': 0, 'sms.sent': 0},
             )
