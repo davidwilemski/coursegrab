@@ -20,6 +20,7 @@ def parse_line(data, line):
     
     elif 'POST /twilio_receive' in line:
         data['sms.received'] += 1 
+        data['sms.sent'] += 1 
     
     elif 'sending notification sms' in line:
         data['sms.sent'] += 1 
